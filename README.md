@@ -96,7 +96,7 @@ intended ADB transport explicitly:
 ./run.sh 1 --device-id YOUR_RO_SERIALNO
 ```
 
-`run.sh` stages `ic98260`, `ksupatch`, `insmodf` and `kernelsu.ko`
+`run.sh` stages `ic98260` as `vvlogd`, `ksupatch`, `insmodf` and `kernelsu.ko`
 under `/data/local/tmp`. It collects evidence under ignored `logs/` and
 stops when a module is listed. Check that the module is **Live**, open
 Manager and verify its Working status, original library, driver handle,

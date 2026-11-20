@@ -7,12 +7,12 @@ target-by-target reverse-engineering record is in
 repository.
 
 ```
-host:  run.sh ──(adb, SERIAL)──► /data/local/tmp/ic98260 fake
+host:  run.sh ──(adb, SERIAL)──► /data/local/tmp/vvlogd fake
               │
-              │ staged: ic98260, ksupatch, insmodf, kernelsu.ko
+              │ staged: vvlogd (built as bin/ic98260), ksupatch, insmodf, kernelsu.ko
               │        (sha256-verified after push)
               ▼
-device: ic98260 "fake" (a single process tree)
+device: vvlogd "fake" (the ic98260 build) (a single process tree)
               │
               ├─ 1. trigger: CVE-2026-98260 posix-cpu-timer UAF
               ├─ 2. cred leak → fake-root child (full caps, SELinux permissive)
@@ -38,7 +38,7 @@ an insertion attempt needs diagnosis. It never kills parked device processes.
 
 ## 1. Bootstrap (`src/timer/timer.c`, mode `fake`)
 
-`ic98260 fake` runs the CVE-2026-98260 chain. The big picture (details and
+`vvlogd fake` (the ic98260 build) runs the CVE-2026-98260 chain. The big picture (details and
 per-build constants in `src/timer/targets.h`; methodology in FINDINGS):
 
 1. **Trace point discovery.** The tracefs `perf` timer-alloc events are not
