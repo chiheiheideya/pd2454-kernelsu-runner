@@ -18,10 +18,20 @@ This repository contains source, not prebuilt executables or OEM firmware.
 
 ## Exact validated target
 
-- Kernel: `6.6.127-android15-8-g3b723d0e8507-abogki558056638-4k`
-- Firmware fingerprint: `vivo/PD2454/PD2454:17/CP2A.260605.016_V000L1/261030013318:user/release-keys`
-- Android 17 / OriginOS 7; ARM64, 4 KiB pages.
-- KernelSU source: [`690121bfb35e147b2ef7fa7c88090cd006367e51`](https://github.com/kailashrs/KernelSU/commit/690121bfb35e147b2ef7fa7c88090cd006367e51), based on v3.3.1.
+Two kernel lines are accepted, newest first:
+
+- `6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k` — OriginOS 7
+  17.2.11.5, 17.2.12.0 and 17.2.13.3.W10.V000L1: all three ship this
+  kernel Image byte-identical (13.3 incremental `261119010622`); only
+  the boot-image fingerprint changes. The fingerprint for this pair is
+  advisory (logged, not enforced) until pinned from a real flash.
+- `6.6.127-android15-8-g3b723d0e8507-abogki558056638-4k` — 17.2.10.6,
+  fingerprint `vivo/PD2454/PD2454:17/CP2A.260605.016_V000L1/261030013318:user/release-keys`
+  (live-proven build).
+
+Android 17 / OriginOS 7; ARM64, 4 KiB pages. KernelSU source: the
+[`codex/pd2454-hardening`](https://github.com/kailashrs/KernelSU/tree/codex/pd2454-hardening)
+branch of the fork, based on v3.3.1.
 
 The shell runner refuses a different kernel or fingerprint. Historical target
 entries remain in the bootstrap headers; their presence does not establish

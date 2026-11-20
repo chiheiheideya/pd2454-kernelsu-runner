@@ -160,6 +160,9 @@ static const struct target g_targets[] = {
          * 6.6.127-android15-8-gd489d4ad2a70-abogki567717946-4k
          * vivo X200 Ultra (PD2454) OriginOS 7, 17.2.11.5.W10.V000L1
          * (SPL follow-up to 17.2.10.6, kernel build abogki567717946).
+         * The SAME kernel Image is shipped byte-identical by 17.2.12.0
+         * and 17.2.13.3.W10.V000L1 (13.3 incremental 261119010622) —
+         * this one entry serves all three builds.
          *
          * Constants verified 2026-11-12 from the build's Image
          * (vmlinux-to-elf kallsyms + disasm):
