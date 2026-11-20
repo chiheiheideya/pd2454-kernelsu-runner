@@ -10,8 +10,8 @@ module_live() {
     # Hidden-module profile: the module may no longer appear in /proc/modules.
     # ksuquery runs as root here and must obtain the version through the gated
     # supercall handshake; on older unhided builds the /proc/modules line also
-    # still counts.
-    if grep -q '^kernelsu .* Live ' /proc/modules; then
+    # still counts (the binder renames the image, so accept both names).
+    if grep -qE '^(kernelsu|vfcs_sec) .* Live ' /proc/modules; then
         return 0
     fi
     [ -x /data/local/tmp/ksuquery ] && /data/local/tmp/ksuquery 2>/dev/null | grep -q '^KSU_VERSION='

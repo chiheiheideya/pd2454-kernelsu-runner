@@ -7,6 +7,8 @@
 // Channels:
 //   modules       /proc/modules lines matching kernelsu/ksu
 //   sysfs         /sys/module/kernelsu presence
+//   module_btf    /sys/kernel/btf/kernelsu presence + ksu names in the
+//                 per-module BTF directory (survives the hide profile)
 //   kallsyms      /proc/kallsyms symbol names matching ksu (addresses are
 //                 zeroed by kptr_restrict; names are the leak)
 //   dmesg         klogctl(2)/SYS_syslog ring read + grep KernelSU/ksu
@@ -128,6 +130,41 @@ int main(void)
         printf("sysfs=PRESENT\n");
     else
         printf("sysfs=absent_errno_%d\n", errno);
+
+    /* Module BTF: registered per module at load time
+     * (/sys/kernel/btf/<name>, world-readable) and NOT removed by the
+     * fork's hide profile (kobject_del/list_del only cover /sys/module,
+     * /proc/modules and kallsyms). The binder's rename pass renames the
+     * whole file, so any kernelsu name here means the rename did not
+     * run. Listing the directory also catches a renamed-file-content
+     * regression: only file NAMES are visible, content needs root. */
+    if (stat("/sys/kernel/btf/kernelsu", &st) == 0)
+        printf("module_btf=PRESENT\n");
+    else
+        printf("module_btf=absent_errno_%d\n", errno);
+    {
+        DIR *d = opendir("/sys/kernel/btf");
+        struct dirent *de;
+        int hits = 0;
+        char first[128] = "";
+
+        if (!d) {
+            printf("module_btf_dir=open_errno_%d\n", errno);
+        } else {
+            while ((de = readdir(d))) {
+                if (contains_ksu(de->d_name)) {
+                    hits++;
+                    if (!first[0])
+                        snprintf(first, sizeof(first), "%.120s", de->d_name);
+                }
+            }
+            closedir(d);
+            if (hits)
+                printf("module_btf_dir=HITS_%d first=[%s]\n", hits, first);
+            else
+                printf("module_btf_dir=CLEAN\n");
+        }
+    }
 
     check_file_lines("kallsyms", "/proc/kallsyms");
     check_file_lines("devices", "/proc/devices");

@@ -15,4 +15,9 @@ python3 "$repo_dir/tests/check_stage.py"
 if [ "$#" -eq 1 ]; then
     "$compiler" -O1 -g -fsanitize=address,undefined -Wall -Wextra         "$repo_dir/src/ksupatch.c" -o "$test_dir/ksupatch"
     python3 "$repo_dir/tests/test_binder.py" "$1" "$test_dir/ksupatch"
+    # Name-hardening gate: the module image must survive the rename pass
+    # with no ksu/kernelsu tokens left in any app-readable name section.
+    "$compiler" -O1 -g -fsanitize=address,undefined -Wall -Wextra -I"$repo_dir/src" \
+        "$repo_dir/tests/ksrename-test.c" -o "$test_dir/ksrename-test"
+    "$test_dir/ksrename-test" "$1" "$test_dir/renamed.ko"
 fi

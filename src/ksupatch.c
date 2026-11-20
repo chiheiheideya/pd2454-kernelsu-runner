@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include "ksrename.h"
 #include <unistd.h>
 
 typedef struct {
@@ -269,7 +270,27 @@ int main(int argc,char **argv)
     struct image m={.size=(size_t)in.st_size}; m.bytes=malloc(m.size); if (!m.bytes) return 1;
     FILE *f=fopen(argv[2],"rb"); if (!f) {free(m.bytes);return 1;}
     int ok=fread(m.bytes,1,m.size,f)==m.size; fclose(f);
-    if (!ok || parse(&m) || profile(&m) || relocations(&m) || bind_symbols(&m,slide) || write_atomic(&m,argv[3])) {free(m.bytes);return 1;}
+    if (!ok || parse(&m) || profile(&m) || relocations(&m) || bind_symbols(&m,slide)) {free(m.bytes);return 1;}
+    /* Name hardening, strictly AFTER the name-keyed binder passes:
+     * with CONFIG_KSU_HIDE_MODULE the fork unlinks itself from
+     * /proc/modules and kallsyms after init, but the module BTF
+     * registered at load time keeps /sys/kernel/btf/<name> and its
+     * ksu_* names world-readable, and an unhided build exposes every
+     * name surface.  The rename is equal-length in-place and validates
+     * the whole image (including SHN_UNDEF name spans, which are left
+     * untouched) before writing, so already-bound relocations and
+     * kernel-side name resolution are unaffected.  A duplicate-name
+     * collision would fail closed at insmod; vfcs_sec is verified not
+     * loaded on PD2454. */
+    {
+        struct ks_rename_stats rst;
+        if (ks_rename_module(m.bytes,m.size,&rst)) {fail("module rename pass failed");free(m.bytes);return 1;}
+        fprintf(stderr,"ksupatch: renamed module '%s'->'%s' (modinfo=%u/%u this_module=%u strtab=%u/%u/%u/%u protected=%u btf=%u/%u/%u/%u)\n",
+                KS_RENAME_OLD,KS_RENAME_MODULE,rst.modinfo_name,rst.modinfo_other,rst.this_module_name,
+                rst.strtab_exact,rst.strtab_prefix,rst.strtab_token,rst.strtab_upfx,rst.strtab_protected,
+                rst.btf_exact,rst.btf_prefix,rst.btf_token,rst.btf_upfx);
+    }
+    if (write_atomic(&m,argv[3])) {free(m.bytes);return 1;}
     printf("KSUPATCH_OK %s slide=%#llx\n",argv[3],(unsigned long long)slide);
     free(m.bytes);return 0;
 }
