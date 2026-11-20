@@ -24,10 +24,31 @@ with tempfile.TemporaryDirectory(prefix='ksu-binder-') as temp:
   p=m.bysec['.symtab']['offset']+sy['index']*24
   allowed.update(range(p+6,p+8));allowed.update(range(p+8,p+16));count+=1
  assert count==len(table)
+ # The post-binder name-hardening pass rewrites, equal-length and in
+ # place, inside exactly these sections (see src/ksrename.h).  Every
+ # other byte of the image must stay identical.
+ rename_secs={'.modinfo','.gnu.linkonce.this_module','.strtab','.BTF'}
+ for s in m.sec:
+  if s['name'] in rename_secs and s['type']!=8:
+   allowed.update(range(s['offset'],s['offset']+s['size']))
  changed={i for i,(a,b) in enumerate(zip(m.b,bound.b)) if a!=b}
- assert len(m.b)==len(bound.b) and changed<=allowed
+ assert len(m.b)==len(bound.b) and changed<=allowed,sorted(changed-allowed)[:8]
  for sec in m.sec:
-  if sec['name']!='.symtab' and sec['type']!=8:assert m.data(sec)==bound.data(sec['name']),sec['name']
+  if sec['name']!='.symtab' and sec['type']!=8 and sec['name'] not in rename_secs:
+   assert m.data(sec)==bound.data(sec['name']),sec['name']
+ # Rename invariants (depth is covered by tests/ksrename-test.c).  The
+ # .modinfo "ksu_no_text_poke=1"/"ksu_self_resolved_data=1" compatibility
+ # markers are protocol strings the consumer asserts on, live only in the
+ # module file (never exposed through /proc) and are kept on purpose.
+ for s in m.sec:
+  if s['type']==8 or s['name'] not in rename_secs:continue
+  b=bound.data(s['name'])
+  if s['name']!='.modinfo':
+   assert b'kernelsu' not in b and b'ksu_' not in b,s['name']
+  else:
+   assert b'kernelsu' not in b,'module name still in modinfo'
+   assert b'name=vfcs_sec' in b,'modinfo name= not rewritten'
+   assert b'ksu_no_text_poke=1' in b and b'ksu_self_resolved_data=1' in b,'compat markers lost'
  preserved=bound.b;changed_count=len(changed)
  mutations=[]
  for length in [0,1,63,64,len(m.b)-1]:mutations.append((f'truncated-{length}',m.b[:length]))
@@ -68,4 +89,4 @@ with tempfile.TemporaryDirectory(prefix='ksu-binder-') as temp:
  for i in range(100):
   b=bytearray(m.b);area=random.choice([(0,64),(m.shoff,len(b)),(sym['offset'],sym['offset']+sym['size'])]);off=random.randrange(*area);b[off]^=1<<random.randrange(8)
   inp=d/'fuzz.ko';inp.write_bytes(b);invoke(inp)
- print(f'PASS: {count} symbols bound; only {changed_count} symbol-record bytes changed; sections/instructions identical; {len(mutations)} malformed cases, CLI guards and 100 sanitizer mutation cases checked')
+ print(f'PASS: {count} symbols bound; only {changed_count} bytes changed, confined to symbol records and the rename sections; other sections/instructions identical; {len(mutations)} malformed cases, CLI guards and 100 sanitizer mutation cases checked')
