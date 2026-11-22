@@ -1,0 +1,46 @@
+name: build-ic98260
+on:
+  workflow_dispatch:
+    inputs:
+      apply_pin_patch:
+        description: "apply pin patch (spray CPU2, killer CPU3)"
+        required: true
+        default: "true"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: sudo apt-get update && sudo apt-get install -y unzip
+      - name: Download NDK r29
+        run: |
+          python3 - <<'PY'
+          import urllib.request
+          urllib.request.urlretrieve("https://dl.google.com/android/repository/android-ndk-r29-linux.zip", "ndk.zip")
+          PY
+          unzip -q ndk.zip
+          echo "NDK=$PWD/android-ndk-r29" >> "$GITHUB_ENV"
+      - name: Apply pin patch
+        if: ${{ github.event.inputs.apply_pin_patch == 'true' }}
+        run: |
+          python3 - <<'PY'
+          p = 'src/timer/timer.c'
+          s = open(p).read()
+          n0 = s
+          s = s.replace('args[i].cpu = i;', 'args[i].cpu = 2;')
+          old = 'static int killer_fn(void *x)\n{\n    int tid, tgid;\n    (void)x;\n    pin(2);'
+          new = 'static int killer_fn(void *x)\n{\n    int tid, tgid;\n    (void)x;\n    pin(3);'
+          s = s.replace(old, new)
+          assert s != n0, 'patch did not apply'
+          open(p, 'w').write(s)
+          print('pin patch applied')
+          PY
+      - name: Build
+        run: |
+          python3 tests/check_stage.py
+          NDK=$NDK sh build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ic98260
+          path: bin/ic98260
