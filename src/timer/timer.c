@@ -2880,7 +2880,7 @@ static int wait_child_main(const char *mode)
          * Once the window opens, resolve the guard's $d anchors, post
          * the .bss/.data bases, and hold until the parent cleared the
          * hooks (late load stays denied otherwise). */
-        if (HKD_ENABLED)
+        if (0 /* HKD disabled: kprobes_disarm replaces it */)
         {
             hkd_capture_diag();
             hkd_child_stage();
@@ -3449,7 +3449,7 @@ int main(int argc, char **argv)
      *      $d.117_runtime + 0x140, measured not assumed): slot 6 gates
      *      the kptr re-pin, slots 10..13 hold the saved value, slot 8 is
      *      the allow-all bypass and slot 9 the hard lock. */
-    if (HKD_ENABLED)
+    if (0 /* HKD disabled: kprobes_disarm replaces it */)
     {
         static const unsigned long long pre[8] = {
             0x108ULL, 0x188ULL, 0x450ULL, 0x4d0ULL,
