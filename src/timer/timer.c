@@ -3387,10 +3387,14 @@ int main(int argc, char **argv)
         if (stage_write(SELINUX_STATE_STATIC + g_slide - 7, 0,
                         "selinux", raw, NULL))
             park_forever("selinux write failed");
-        if (read_panic_on_warn() != 0 &&
-            stage_write(PANIC_ON_WARN_STATIC + g_slide, 0,
-                        "panic_on_warn", raw, NULL))
-            park_forever("panic_on_warn write failed");
+        /* 读不到（-1）时默认视为 0，跳过植入（默认值就是 0） */
+        {
+            int pw = read_panic_on_warn();
+            if (pw > 0 &&
+                stage_write(PANIC_ON_WARN_STATIC + g_slide, 0,
+                            "panic_on_warn", raw, NULL))
+                park_forever("panic_on_warn write failed");
+        }
         if (stage_write(fc.A + CRED_UID_OFF, 0, "fake_uid", raw, NULL))
             park_forever("fake uid fix failed");
     }
