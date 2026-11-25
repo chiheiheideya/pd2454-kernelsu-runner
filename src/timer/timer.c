@@ -2941,12 +2941,13 @@ static int wait_child_main(const char *mode)
         {
             int kfd = open("/data/local/tmp/ksu_patched.ko", O_RDONLY);
 
+            logf("[fake] finit open=%d errno=%d\n", kfd, errno);
             if (kfd >= 0)
             {
                 errno = 0;
                 long kr = syscall(SYS_finit_module, kfd, "", 0);
 
-                logf("[fake] direct finit_module ret=%ld errno=%d\n", kr, errno);
+                logf("[fake] finit syscall ret=%ld errno=%d\n", kr, errno);
                 close(kfd);
             }
             else
