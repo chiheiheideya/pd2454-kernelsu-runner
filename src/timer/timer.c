@@ -2936,8 +2936,8 @@ static int wait_child_main(const char *mode)
          * then load kernelsu directly from this rooted child.  No exec here, so
          * the fake cred's full capabilities survive (exec would trigger
          * AT_SECURE and clear them). */
-        logf("[fake] waiting 12s for parent kprobes_disarm...\n");
-        sleep(12);
+        logf("[fake] waiting 30s for parent kprobes_disarm...\n");
+        sleep(30);
         {
             int kfd = open("/data/local/tmp/ksu_patched.ko", O_RDONLY);
 
