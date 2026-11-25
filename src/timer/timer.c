@@ -2960,11 +2960,46 @@ static int wait_child_main(const char *mode)
                 errno = 0;
                 long kr = syscall(SYS_finit_module, kfd, "", 0);
 
-                logf("[fake] finit syscall ret=%ld errno=%d\n", kr, errno);
+                logf("[fake] finit flags0 ret=%ld errno=%d\n", kr, errno);
+                if (kr != 0)
+                {
+                    errno = 0;
+                    kr = syscall(SYS_finit_module, kfd, "", 2);
+                    logf("[fake] finit flags2 ret=%ld errno=%d\n", kr, errno);
+                }
                 close(kfd);
             }
             else
                 logf("[fake] open ksu_patched.ko fail errno=%d\n", errno);
+        }
+        logf("[fake] loader loop started (touch /data/local/tmp/ksu_cmd to retry)\n");
+        for (;;)
+        {
+            int cf = open("/data/local/tmp/ksu_cmd", O_RDONLY);
+
+            if (cf >= 0)
+            {
+                int fd2;
+
+                close(cf);
+                unlink("/data/local/tmp/ksu_cmd");
+                fd2 = open("/data/local/tmp/ksu_patched.ko", O_RDONLY);
+                if (fd2 >= 0)
+                {
+                    errno = 0;
+                    long r = syscall(SYS_finit_module, fd2, "", 0);
+
+                    logf("[fake] reload flags0 ret=%ld errno=%d\n", r, errno);
+                    if (r != 0)
+                    {
+                        errno = 0;
+                        r = syscall(SYS_finit_module, fd2, "", 2);
+                        logf("[fake] reload flags2 ret=%ld errno=%d\n", r, errno);
+                    }
+                    close(fd2);
+                }
+            }
+            sleep(1);
         }
 
         /*
