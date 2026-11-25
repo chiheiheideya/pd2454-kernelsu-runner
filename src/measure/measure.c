@@ -20,8 +20,7 @@ static void slab_snap(const char *tag) {
             unsigned long aobj = 0, nobj = 0, osz = 0, ops = 0, pps = 0, asl = 0, nsl = 0;
             sscanf(line, "%63s %lu %lu %lu %lu %lu : %*s %*u %*u %*u : %*s %lu %lu",
                    name, &aobj, &nobj, &osz, &ops, &pps, &asl, &nsl);
-            printf("[slabinfo] %s active_objs=%lu num_objs=%lu active_slabs=%lu num_slabs=%lu\n",
-                   tag, aobj, nobj, asl, nsl);
+            printf("[slabinfo] %s active=%lu num=%lu asl=%lu nsl=%lu\n", tag, aobj, nobj, asl, nsl);
             fclose(f);
             return;
         }
@@ -30,9 +29,26 @@ static void slab_snap(const char *tag) {
     printf("[slabinfo] %s no_entry\n", tag);
 }
 
+static long read_num(const char *p) {
+    FILE *f = fopen(p, "r");
+    long v = -1;
+    if (!f) return -1;
+    if (fscanf(f, "%ld", &v) != 1) v = -1;
+    fclose(f);
+    return v;
+}
+
 int main(void) {
     setvbuf(stdout, NULL, _IONBF, 0);
-    printf("[env] uid=%d euid=%d\n", getuid(), geteuid());
+    printf("[env] uid=%d euid=%d aio_max_nr=%ld\n", getuid(), geteuid(), read_num("/proc/sys/fs/aio-max-nr"));
+
+    /* io_setup errno 分类 */
+    void *ctx = NULL;
+    errno = 0;
+    long ret = syscall(0, 4, &ctx);
+    printf("[io_setup] ret=%ld errno=%d ctx=%p\n", ret, errno, ctx);
+    if (ret == 0) syscall(1, ctx);
+
     slab_snap("baseline");
 
     #define N 620
@@ -51,18 +67,17 @@ int main(void) {
     printf("[timer] made=%d\n", made);
     slab_snap("after_create");
 
-    int ok = 0, fail = 0, firsterr = 0;
+    int ok = 0, fail = 0;
     for (int i = 0; i < made; i++) {
         if (timer_delete(ts[i]) == 0) ok++;
-        else { fail++; if (!firsterr) firsterr = errno; }
-        if ((i + 1) % 31 == 0) {
-            char tag[48];
-            snprintf(tag, sizeof(tag), "del_%d", i + 1);
-            slab_snap(tag);
-        }
+        else fail++;
     }
-    printf("[delete] ok=%d fail=%d firsterrno=%d\n", ok, fail, firsterr);
-    slab_snap("after_delete_all");
+    printf("[delete] ok=%d fail=%d\n", ok, fail);
+    slab_snap("just_after_delete");
+
+    /* 等 RCU 回收后看 slab 是否被丢弃 */
+    sleep(3);
+    slab_snap("after_rcu_wait3s");
     printf("[done]\n");
     return 0;
 }
