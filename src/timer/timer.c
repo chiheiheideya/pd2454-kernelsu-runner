@@ -2170,7 +2170,7 @@ static int stage_write(unsigned long long target, int mode,
     {
         memset(&r, 0, sizeof(r));
         logf("[+] stage %s target=%#llx mode=%s attempt=%d\n", what, target,
-             mode == 2 ? "fake" : "zero", attempt);
+             mode == 2 ? "fake" : mode == 1 ? "one(0x1000001)" : "zero", attempt);
         run_plant(target, 1, mode, &r, raw);
         if (r.ok)
         {
@@ -2739,7 +2739,7 @@ static void run_plant(unsigned long long target, int tag, int mode,
     res->A = V + 0x78;
     res->ok = 1;
     logf("[+] plant%d write mode=%s target=%#llx\n", tag,
-         mode == 2 ? "fake" : "zero", target);
+         mode == 2 ? "fake" : mode == 1 ? "one(0x1000001)" : "zero", target);
     free(payload);
 }
 
