@@ -1,0 +1,25 @@
+name: build-measure
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: sudo apt-get update && sudo apt-get install -y unzip
+      - name: Download NDK r29
+        run: |
+          python3 - <<'PY'
+          import urllib.request
+          urllib.request.urlretrieve("https://dl.google.com/android/repository/android-ndk-r29-linux.zip", "ndk.zip")
+          PY
+          unzip -q ndk.zip
+          echo "NDK=$PWD/android-ndk-r29" >> "$GITHUB_ENV"
+      - name: Build measure
+        run: |
+          $NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang -O2 -o measure src/measure/measure.c
+      - uses: actions/upload-artifact@v4
+        with:
+          name: measure
+          path: measure
