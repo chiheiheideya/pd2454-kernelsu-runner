@@ -2975,22 +2975,14 @@ static int wait_child_main(const char *mode)
     {
         rep.setuid_ret = 0;
         rep.setuid_errno = 0;
-        logf("[child] already euid=0: skipping setuid/setresgid (vr.ko bypass)\n");
-        /* 2026-11-25: real uid 可能被 rb_erase 弄脏；若 ruid != 0，
-         * exec daemon 会触发 AT_SECURE 清空 caps。这里用 CAP_SETUID 修 uid。 */
-        {
-            uid_t ru = 0, eu = 0, su = 0;
-
-            getresuid(&ru, &eu, &su);
-            if (ru != 0)
-            {
-                errno = 0;
-                rep.setuid_ret = (int)syscall(SYS_setuid, 0);
-                rep.setuid_errno = errno;
-                logf("[child] dirty ruid=%d -> setuid(0) ret=%d errno=%d\n",
-                     (int)ru, rep.setuid_ret, rep.setuid_errno);
-            }
-        }
+        logf("[child] already euid=0: skipping setresgid (vr.ko bypass)\n");
+        /* 2026-11-25: 无条件 setuid(0) 修 real uid（fake cred 的 uids 会被
+         * rb_erase 弄脏，getresuid 在 fake cred 下读数不可靠）。失败也无害。 */
+        errno = 0;
+        rep.setuid_ret = (int)syscall(SYS_setuid, 0);
+        rep.setuid_errno = errno;
+        logf("[child] force setuid(0) ret=%d errno=%d\n",
+             rep.setuid_ret, rep.setuid_errno);
     }
     else
     {
