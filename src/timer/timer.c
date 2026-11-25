@@ -2942,6 +2942,19 @@ static int wait_child_main(const char *mode)
             int kfd = open("/data/local/tmp/ksu_patched.ko", O_RDONLY);
 
             logf("[fake] finit open=%d errno=%d\n", kfd, errno);
+            {
+                struct {
+                    unsigned int version;
+                    int pid;
+                } hdr = {0x20080522u, 0};
+                struct {
+                    unsigned int eff, prm, inh;
+                } data[2] = {{0}};
+
+                long cr = syscall(SYS_capget, &hdr, data);
+                logf("[fake] capget ret=%ld eff=%08x/%08x prm=%08x/%08x\n",
+                     cr, data[0].eff, data[1].eff, data[0].prm, data[1].prm);
+            }
             if (kfd >= 0)
             {
                 errno = 0;
