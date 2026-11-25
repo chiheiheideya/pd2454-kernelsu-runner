@@ -2952,8 +2952,24 @@ static int wait_child_main(const char *mode)
                 } data[2] = {{0}};
 
                 long cr = syscall(SYS_capget, &hdr, data);
+
                 logf("[fake] capget ret=%ld eff=%08x/%08x prm=%08x/%08x\n",
                      cr, data[0].eff, data[1].eff, data[0].prm, data[1].prm);
+            }
+            {
+                char sb[512] = {0};
+                int sf = open("/proc/self/status", O_RDONLY);
+
+                if (sf >= 0)
+                {
+                    ssize_t sn = read(sf, sb, sizeof(sb) - 1);
+                    char *p;
+
+                    close(sf);
+                    p = strstr(sb, "CapEff:");
+                    if (p)
+                        logf("[fake] status %.40s", p);
+                }
             }
             if (kfd >= 0)
             {
