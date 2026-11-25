@@ -3153,9 +3153,10 @@ static void defeat_vr(unsigned long long task, unsigned char *raw, pid_t child)
         logf("[-] vr de-tag: bad task=%#llx, skipped\n", task);
         return;
     }
-    logf("[+] vr de-tag: task=%#llx, sys-exit only (flags/tagB skipped)\n", task);
-    /* 2026-11-25 lite: janewas 结论——vr 反 root 的关键只有 sys_exit funcs
-     * 一处；前两个 task tag 写省掉，减少 2 次抢页。 */
+    logf("[+] vr de-tag: task=%#llx, flags + sys-exit (tagB skipped)\n", task);
+    /* 2026-11-25 lite2: 保留 vr-flags——g_slide 在第一次 run_plant 里才被
+     * 赋值，跳过它会让 sys-exit 用静态地址写未映射内存（panic）。 */
+    zero_write(task + 0x00, "vr-flags", raw);
     /* Globally disable vr's sys_exit kill path: the sys_exit tracepoint's
      * iterator NULL-checks funcs (cbz in the reference disasm), so clearing
      * the pointer is safe and keeps vr's termination probe from firing for
