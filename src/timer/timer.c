@@ -2932,6 +2932,27 @@ static int wait_child_main(const char *mode)
          * module load below fails); do not wait on it here. */
         logf("[fake] su daemon pid=%d detached\n", w);
 
+        /* 2026-11-25: wait for the parent's post-daemon kprobes_disarm to land,
+         * then load kernelsu directly from this rooted child.  No exec here, so
+         * the fake cred's full capabilities survive (exec would trigger
+         * AT_SECURE and clear them). */
+        logf("[fake] waiting 12s for parent kprobes_disarm...\n");
+        sleep(12);
+        {
+            int kfd = open("/data/local/tmp/ksu_patched.ko", O_RDONLY);
+
+            if (kfd >= 0)
+            {
+                errno = 0;
+                long kr = syscall(SYS_finit_module, kfd, "", 0);
+
+                logf("[fake] direct finit_module ret=%ld errno=%d\n", kr, errno);
+                close(kfd);
+            }
+            else
+                logf("[fake] open ksu_patched.ko fail errno=%d\n", errno);
+        }
+
         /*
          * 64560-style finalize (2026-10-31): run the KSU stage inline from
          * this rooted child — permissive window -> ksud late-load ->
