@@ -255,6 +255,7 @@ static void drain_cpu(int cpu)
 static void trace_start(void)
 {
     wr(TR "/tracing_on", "0");
+    wr(TR "/buffer_size_kb", "8192");
     wr(TR "/trace", "\n");
     drain_cpu(g_cpu);
     wr(TR "/tracing_on", "1");
@@ -2668,7 +2669,7 @@ static void run_plant(unsigned long long target, int tag, int mode,
     int hit = 0;
     int foreign = 0;
 
-    while (!hit && now_ms() - t1 < 15000)
+    while (!hit && now_ms() - t1 < 22000)
     {
         for (int cpu = 0; cpu < 8; cpu++)
         {
